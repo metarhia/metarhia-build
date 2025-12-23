@@ -1,0 +1,43 @@
+{
+  "name": "metarhia-build",
+  "version": "0.0.0",
+  "author": "Timur Shemsedinov <timur.shemsedinov@gmail.com>",
+  "license": "MIT",
+  "description": "Metarhia Module Builder",
+  "keywords": [
+    "node.js",
+    "metarhia",
+    "module",
+    "builder"
+  ],
+  "main": "metarhia-build.js",
+  "bin": {
+    "metarhia-build": "./metarhia-build.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/metarhia/metarhia-build.git"
+  },
+  "bugs": {
+    "url": "https://github.com/metarhia/metarhia-build/issues",
+    "email": "timur.shemsedinov@gmail.com"
+  },
+  "homepage": "https://metarhia.com",
+  "funding": {
+    "type": "patreon",
+    "url": "https://www.patreon.com/tshemsedinov"
+  },
+  "scripts": {
+    "test": "npm run lint && node --test",
+    "lint": "eslint . && prettier --check \"**/*.js\" \"**/*.json\" \"**/*.md\"",
+    "fix": "eslint . --fix && prettier --write \"**/*.js\" \"**/*.json\" \"**/*.md\""
+  },
+  "devDependencies": {
+    "eslint": "^9.35.0",
+    "eslint-config-metarhia": "^9.1.5",
+    "prettier": "^3.3.3"
+  }
+}
