@@ -57,10 +57,14 @@ test('build: creates bundle with correct structure', async () => {
   assert.ok(output.includes(packageName)); // package name in header
   assert.ok(output.includes(licenseLines[0])); // license name
 
+  // Check required libs
+  assert.ok(output.includes('//#region test-package'));
+  assert.ok(output.includes(`const TEST_PACKAGE_VAR = 'test-package';`));
+
   // Check file comments
-  assert.ok(output.includes('// test1.js'));
-  assert.ok(output.includes('// test2.js'));
-  assert.ok(output.includes('// test3.js'));
+  assert.ok(output.includes('//#region test1.js'));
+  assert.ok(output.includes('//#region test2.js'));
+  assert.ok(output.includes('//#region test3.js'));
 
   // Check exports
   assert.ok(output.includes('export { test1 };'));
@@ -83,9 +87,9 @@ test('build: processes files in correct order', async () => {
   const output = fs.readFileSync(outputFile, 'utf8');
 
   // Check that files appear in the correct order
-  const test1Index = output.indexOf('// test1.js');
-  const test2Index = output.indexOf('// test2.js');
-  const test3Index = output.indexOf('// test3.js');
+  const test1Index = output.indexOf('//#region test1.js');
+  const test2Index = output.indexOf('//#region test2.js');
+  const test3Index = output.indexOf('//#region test3.js');
 
   assert.ok(test1Index < test2Index, 'test1.js should come before test2.js');
   assert.ok(test2Index < test3Index, 'test2.js should come before test3.js');

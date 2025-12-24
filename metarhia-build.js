@@ -10,7 +10,7 @@ const buildConfigContent = fs.readFileSync(buildConfigPath, 'utf8');
 const buildConfig = JSON.parse(buildConfigContent);
 const fileOrder = buildConfig.order;
 
-const libDir = path.join(cwd, 'lib');
+const libDir = path.join(cwd, buildConfig.libDir || 'lib');
 const packageJsonPath = path.join(cwd, 'package.json');
 const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
 const packageJson = JSON.parse(packageJsonContent);
@@ -42,7 +42,7 @@ const processFile = (filename) => {
   const filteredLines = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.includes('require(')) continue;
+    if (line.includes('require(') || line.includes('import ')) continue;
     filteredLines.push(line);
   }
   content = filteredLines.join('\n');
@@ -54,13 +54,22 @@ const build = () => {
   const header =
     `// ${copyrightLine}\n` +
     `// Version ${packageJson.version} ${packageName} ${licenseName}\n\n`;
+  const requiredLibs = (buildConfig.require || [])
+    .map((lib) => {
+      const fileName = `./node_modules/${lib}/${lib}.mjs`;
+      const source = fs.readFileSync(fileName, 'utf8');
+      return `//#region ${lib}\n${source}\n//#endregion\n`;
+    })
+    .join('\n');
   const bundle = [];
   for (const filename of fileOrder) {
     const content = processFile(filename);
-    bundle.push(`// ${filename}\n`);
+    bundle.push(`//#region ${filename}\n`);
     bundle.push(content + '\n');
+    bundle.push(`//#endregion\n`);
   }
-  const content = header + bundle.join('\n').replaceAll('\n\n\n', '\n\n');
+  const content =
+    header + requiredLibs + bundle.join('\n').replaceAll('\n\n\n', '\n\n');
   fs.writeFileSync(outputFile, content, 'utf8');
   console.log(`Bundle created: ${outputFile}`);
 };
