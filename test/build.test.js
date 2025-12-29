@@ -1,6 +1,6 @@
 'use strict';
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,6 +13,10 @@ const packageJson = JSON.parse(
 );
 const packageName = packageJson.name.split('/').pop();
 const outputFile = path.join(fixturesDir, `${packageName}.mjs`);
+
+after(() => {
+  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+});
 
 const run = (cwd, buildConfig) =>
   new Promise((resolve, reject) => {
@@ -215,6 +219,45 @@ test('build app mode: creates symlinks for dependencies', async () => {
 
   // Clean up
   await fs.promises.rm(targetAppDir, { recursive: true });
+});
+
+test('build iife mode: creates self-contained bundle with deps', async () => {
+  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+
+  // Run in iife mode using build.iife.json
+  await run(fixturesDir, 'build.iife.json');
+
+  // Verify the output file was created
+  assert.ok(fs.existsSync(outputFile), 'Output file should be created');
+
+  const output = fs.readFileSync(outputFile, 'utf8');
+
+  // Check that the output is wrapped in an IIFE
+  assert.ok(
+    output.includes(`var ${packageName.replace(/-/g, '')}IIFE`),
+    'Output should start with IIFE variable declaration',
+  );
+
+  // Check that the test package content is included
+  assert.ok(
+    output.includes('//#region test-package'),
+    'Should include test-package source',
+  );
+
+  // Check that the test4.js code is included
+  assert.ok(
+    output.includes('//#region test4.js'),
+    'Should include test4.js source',
+  );
+
+  // Check that the IIFE returns an exports object
+  assert.ok(
+    output.includes('return exports;') || output.includes('return exports }'),
+    'IIFE should return exports',
+  );
+
+  // Clean up
+  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
 });
 
 test('build: fails when build.json is missing', async () => {
