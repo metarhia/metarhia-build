@@ -11,9 +11,12 @@
     "builder"
   ],
   "main": "metarhia-build.js",
-  "files": ["metarhia-build.js", "process-requires.js"],
+  "files": [
+    "metarhia-build.js",
+    "src/*"
+  ],
   "bin": {
-    "metarhia-build": "./metarhia-build.js"
+    "metarhia-build": "metarhia-build.js"
   },
   "engines": {
     "node": ">=18"

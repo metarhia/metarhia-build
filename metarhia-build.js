@@ -3,13 +3,19 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { processLine, renderImportsBlock } = require('./process-requires');
+const { processLine, renderImportsBlock } = require('./src/process-requires');
+const { processLinks } = require('./src/process-links');
 
 const cwd = process.cwd();
-const buildConfigPath = path.join(cwd, 'build.json');
+// add args
+const args = process.argv.slice(2);
+const configPath = args[0] || 'build.json';
+
+const buildConfigPath = path.join(cwd, configPath);
 const buildConfigContent = fs.readFileSync(buildConfigPath, 'utf8');
 const buildConfig = JSON.parse(buildConfigContent);
 const fileOrder = buildConfig.order;
+const mode = buildConfig.mode || 'lib';
 
 const libDir = path.join(cwd, buildConfig.libDir || 'lib');
 const packageJsonPath = path.join(cwd, 'package.json');
@@ -74,4 +80,8 @@ const build = () => {
   console.log(`Bundle created: ${outputFile}`);
 };
 
-build();
+if (mode === 'app') {
+  processLinks(fileOrder);
+} else {
+  build();
+}

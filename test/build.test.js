@@ -14,9 +14,11 @@ const packageJson = JSON.parse(
 const packageName = packageJson.name.split('/').pop();
 const outputFile = path.join(fixturesDir, `${packageName}.mjs`);
 
-const run = (cwd) =>
+const run = (cwd, buildConfig) =>
   new Promise((resolve, reject) => {
-    const proc = spawn('node', [buildPath], {
+    const args = [buildPath];
+    if (buildConfig) args.push(buildConfig);
+    const proc = spawn('node', args, {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -178,6 +180,41 @@ test('build: creates output file with package name', async () => {
 
   // Clean up
   fs.unlinkSync(outputFile);
+});
+
+test('build app mode: creates symlinks for dependencies', async () => {
+  const targetAppDir = path.join(fixturesDir, 'application');
+  const targetDir = path.join(targetAppDir, 'static');
+  const testPkgPath = path.join(
+    fixturesDir,
+    'node_modules',
+    'test-package',
+    'test-package.mjs',
+  );
+
+  // Clean up any existing test files
+  if (fs.existsSync(targetDir)) {
+    await fs.promises.rm(targetDir, { recursive: true });
+  }
+
+  // Run in app mode using build.app.json
+  await run(fixturesDir, 'build.app.json');
+
+  // Verify the symlink was created
+  const linkPath = path.join(targetDir, 'test-package.mjs');
+  assert.ok(fs.existsSync(linkPath), 'Symlink should be created');
+
+  // Verify the symlink points to the correct location
+  const linkTarget = await fs.promises.readlink(linkPath);
+  const expectedTarget = path.relative(path.dirname(linkPath), testPkgPath);
+  assert.strictEqual(
+    linkTarget,
+    expectedTarget,
+    'Symlink should point to the correct file',
+  );
+
+  // Clean up
+  await fs.promises.rm(targetAppDir, { recursive: true });
 });
 
 test('build: fails when build.json is missing', async () => {
