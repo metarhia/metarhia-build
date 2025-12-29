@@ -11,6 +11,7 @@
     "builder"
   ],
   "main": "metarhia-build.js",
+  "files": ["metarhia-build.js", "process-requires.js"],
   "bin": {
     "metarhia-build": "./metarhia-build.js"
   },

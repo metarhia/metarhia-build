@@ -58,21 +58,23 @@ test('build: creates bundle with correct structure', async () => {
   assert.ok(output.includes(licenseLines[0])); // license name
 
   // Check required libs
-  assert.ok(output.includes('//#region test-package'));
-  assert.ok(output.includes(`const TEST_PACKAGE_VAR = 'test-package';`));
+  assert.ok(output.includes(`import { TEST_PCKG_VAR } from 'test-package';`));
 
   // Check file comments
   assert.ok(output.includes('//#region test1.js'));
   assert.ok(output.includes('//#region test2.js'));
   assert.ok(output.includes('//#region test3.js'));
+  assert.ok(output.includes('//#region test4.js'));
 
   // Check exports
   assert.ok(output.includes('export { test1 };'));
   assert.ok(output.includes('export { test2 };'));
+  assert.ok(output.includes('export { test4 };'));
   assert.ok(output.includes('export {'));
 
-  // Check that require() calls are removed
+  // Check that require() and node import calls are removed
   assert.ok(!output.includes('require('));
+  assert.ok(!output.includes(`import fs from 'fs';`));
 
   // Check that 'use strict' is removed
   assert.ok(!output.includes(`'use strict'`));

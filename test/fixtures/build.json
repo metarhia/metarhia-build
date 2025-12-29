@@ -1,4 +1,3 @@
 {
-  "order": ["test1.js", "test2.js", "test3.js"],
-  "require": ["test-package"]
+  "order": ["test1.js", "test2.js", "test3.js", "test4.js"]
 }
