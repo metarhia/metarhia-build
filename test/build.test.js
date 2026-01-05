@@ -14,9 +14,14 @@ const packageJson = JSON.parse(
 );
 const packageName = packageJson.name.split('/').pop();
 const outputFile = path.join(fixturesDir, `${packageName}${BUNDLE_EXT.lib}`);
+const outputIIFEFile = path.join(
+  fixturesDir,
+  `${packageName}${BUNDLE_EXT.iife}`,
+);
 
 after(() => {
   if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+  if (fs.existsSync(outputIIFEFile)) fs.unlinkSync(outputIIFEFile);
 });
 
 const run = (cwd, buildConfig) =>
@@ -77,7 +82,11 @@ test('build: creates bundle with correct structure', async () => {
   assert.ok(output.includes(licenseLines[0])); // license name
 
   // Check required libs
-  assert.ok(output.includes(`import { TEST_PCKG_VAR } from 'test-package';`));
+  assert.ok(
+    // eslint-disable-next-line max-len
+    output.includes(`import { TEST_PCKG_VAR, TEST_PCKG_VAR_1, TEST_PCKG_VAR_2, TEST_PCKG_VAR_3, TEST_PCKG_VAR_4 } from 'test-package';
+`),
+  );
 
   // Check file comments
   assert.ok(output.includes('//#region test1.js'));
@@ -235,17 +244,15 @@ test('build app mode: creates symlinks for dependencies', async () => {
 });
 
 test('build iife mode: creates self-contained bundle with deps', async () => {
-  const outputFile = path.join(fixturesDir, `${packageName}${BUNDLE_EXT.iife}`);
-
-  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+  if (fs.existsSync(outputIIFEFile)) fs.unlinkSync(outputIIFEFile);
 
   // Run in iife mode using build.iife.json
   await run(fixturesDir, 'build.iife.json');
 
   // Verify the output file was created
-  assert.ok(fs.existsSync(outputFile), 'Output file should be created');
+  assert.ok(fs.existsSync(outputIIFEFile), 'Output file should be created');
 
-  const output = fs.readFileSync(outputFile, 'utf8');
+  const output = fs.readFileSync(outputIIFEFile, 'utf8');
 
   // Check that the output is wrapped in an IIFE
   assert.ok(
@@ -272,7 +279,7 @@ test('build iife mode: creates self-contained bundle with deps', async () => {
   );
 
   // Clean up
-  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+  if (fs.existsSync(outputIIFEFile)) fs.unlinkSync(outputIIFEFile);
 });
 
 test('build: fails when build.json is missing', async () => {

@@ -2,7 +2,7 @@
 
 const { resolveFilePath, readFileSync } = require('../utils/file-utils');
 const {
-  parseAndRecordImport,
+  processImports,
   generateImportStatements,
 } = require('../transforms/imports');
 const {
@@ -30,23 +30,7 @@ class Bundler {
     let content = readFileSync(filePath, `processing ${filename}`);
 
     content = content.replace(`'use strict';\n\n`, '');
-
-    const lines = content.split('\n');
-    const filteredLines = [];
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      const { keepLine } = parseAndRecordImport(
-        filename,
-        i + 1,
-        line,
-        this.importRegistry,
-      );
-      if (!keepLine) continue;
-      filteredLines.push(line);
-    }
-
-    content = filteredLines.join('\n');
+    content = processImports(content, filename, this.importRegistry);
 
     if (this.config.mode === 'iife') {
       const names = extractExportNames(content);

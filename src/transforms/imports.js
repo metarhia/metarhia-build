@@ -11,21 +11,23 @@ const NODE_BUILTINS = new Set(
 
 const IMPORT_PATTERNS = {
   REQUIRE_DESTRUCTURING: new RegExp(
-    '^\\s*(?:const|let|var)\\s*\\{\\s*([^}]+)\\s*\\}\\s*=\\s*' +
-      'require\\(\\s*[\'"]([^\'"]+)[\'"]\\s*\\)\\s*;?\\s*$',
+    '(?:const|let|var)\\s*\\{([^}]+)\\}\\s*=\\s*' +
+      'require\\(\\s*[\'"]([^\'"]+)[\'"]\\s*\\);?',
+    'g',
   ),
   REQUIRE_ASSIGNMENT: new RegExp(
-    '^\\s*(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*' +
-      'require\\(\\s*[\'"]([^\'"]+)[\'"]\\s*\\)\\s*;?\\s*$',
+    '(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*' +
+      'require\\(\\s*[\'"]([^\'"]+)[\'"]\\s*\\);?',
+    'g',
   ),
-  REQUIRE_SIDE_EFFECT: /^\s*require\(\s*['"]([^'"]+)['"]\s*\)\s*;?\s*$/,
+  REQUIRE_SIDE_EFFECT: /^require\(\s*['"]([^'"]+)['"]\s*\);?\s*$/gm,
   IMPORT_DESTRUCTURING: new RegExp(
-    '^\\s*import\\s*\\{\\s*([^}]+)\\s*\\}\\s*from\\s*' +
-      '[\'"]([^\'"]+)[\'"]\\s*;?\\s*$',
+    'import\\s*\\{([^}]+)\\}\\s*from\\s*[\'"]([^\'"]+)[\'"];?',
+    'g',
   ),
   IMPORT_ASSIGNMENT: new RegExp(
-    '^\\s*import\\s+([A-Za-z_$][\\w$]*)\\s*from\\s*' +
-      '[\'"]([^\'"]+)[\'"]\\s*;?\\s*$',
+    'import\\s+([A-Za-z_$][\\w$]*)\\s*from\\s*[\'"]([^\'"]+)[\'"];?',
+    'g',
   ),
 };
 
@@ -108,100 +110,58 @@ const validateSpecifier = (specifier, filename, lineNumber, line) => {
   return { valid: true, shouldKeep: false, isExternal: true };
 };
 
-const matchImportPattern = (line) => {
-  for (const [patternName, pattern] of Object.entries(IMPORT_PATTERNS)) {
-    const match = line.match(pattern);
-    if (match) {
-      return { patternName, match };
-    }
-  }
-  return null;
-};
-
-const parseAndRecordImport = (filename, lineNumber, line, importRegistry) => {
-  const hasDeps = line.includes('require(') || line.includes('import ');
-  if (!hasDeps) return { keepLine: true };
-
-  const result = matchImportPattern(line);
-
-  if (!result) {
-    const msg =
-      `Unsupported require() usage in ${filename}:${lineNumber}: ` +
-      `${line.trim()}`;
-    logger.warn(msg);
-    return { keepLine: true };
-  }
-
-  const { patternName, match } = result;
-
-  let specifier;
-  let bindings;
-  let localName;
+const processMatch = (patternName, match, filename, importRegistry) => {
+  let specifier, bindings, localName;
 
   switch (patternName) {
     case 'REQUIRE_DESTRUCTURING':
+    case 'IMPORT_DESTRUCTURING':
       bindings = match[1];
       specifier = match[2];
       break;
     case 'REQUIRE_ASSIGNMENT':
+    case 'IMPORT_ASSIGNMENT':
       localName = match[1];
       specifier = match[2];
       break;
     case 'REQUIRE_SIDE_EFFECT':
       specifier = match[1];
       break;
-    case 'IMPORT_DESTRUCTURING':
-      bindings = match[1];
-      specifier = match[2];
-      break;
-    case 'IMPORT_ASSIGNMENT':
-      localName = match[1];
-      specifier = match[2];
-      break;
   }
 
-  const validation = validateSpecifier(specifier, filename, lineNumber, line);
-  if (!validation.valid) return { keepLine: validation.shouldKeep };
+  const validation = validateSpecifier(specifier, filename, 0, match[0]);
+  if (!validation.valid) return;
 
-  if (isRelativePath(specifier)) {
-    return { keepLine: false };
-  }
+  if (isRelativePath(specifier) || !validation.isExternal) return;
 
-  if (!validation.isExternal) {
-    return { keepLine: false };
-  }
-
-  if (
-    patternName === 'REQUIRE_DESTRUCTURING' ||
-    patternName === 'IMPORT_DESTRUCTURING'
-  ) {
+  if (patternName.includes('DESTRUCTURING')) {
     const parsedBindings = parseDestructuringBindings(bindings);
-    if (parsedBindings.length === 0) return { keepLine: false };
     for (const name of parsedBindings) {
       addNamedImport(importRegistry, specifier, name);
     }
-    return { keepLine: false };
-  }
-
-  if (
-    patternName === 'REQUIRE_ASSIGNMENT' ||
-    patternName === 'IMPORT_ASSIGNMENT'
-  ) {
+  } else if (patternName.includes('ASSIGNMENT')) {
     addDefaultImport(importRegistry, specifier, localName);
-    return { keepLine: false };
-  }
-
-  if (patternName === 'REQUIRE_SIDE_EFFECT') {
+  } else if (patternName === 'REQUIRE_SIDE_EFFECT') {
     addSideEffectImport(importRegistry, specifier);
-    return { keepLine: false };
+  }
+};
+
+const processImports = (content, filename, importRegistry) => {
+  let result = content;
+
+  for (const [patternName, pattern] of Object.entries(IMPORT_PATTERNS)) {
+    const regex = new RegExp(pattern.source, pattern.flags);
+    let match;
+    while ((match = regex.exec(content)) !== null) {
+      processMatch(patternName, match, filename, importRegistry);
+    }
+    result = result.replace(pattern, '');
   }
 
-  const msg =
-    `Unsupported require() usage in ${filename}:${lineNumber}: ` +
-    `${line.trim()}`;
-  logger.warn(msg);
-
-  return { keepLine: false };
+  return result.replace(/^\s*[\r\n]+/gm, (m) => {
+    const lines = m.split(/\r?\n/).filter((l) => l.trim() !== '');
+    return lines.length ? lines.join('\n') + '\n' : '';
+  });
 };
 
 const generateImportStatements = (importRegistry) => {
@@ -243,6 +203,6 @@ const generateImportStatements = (importRegistry) => {
 };
 
 module.exports = {
-  parseAndRecordImport,
+  processImports,
   generateImportStatements,
 };
