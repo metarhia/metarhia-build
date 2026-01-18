@@ -40,7 +40,7 @@ interface Config {
 
 - Default mode is `lib`. It just concantenate files in the order specified in `build.json` order field. And converts all requires to imports and puts import once at the top of the file.
 
-- When `mode` is `iife`, it will bundle everything into `modulename.iife.js` with a header containing version and license information and bundle all dependencies into a single file. This is useful for browser service worker usage - import with `importScripts()`.
+- When `mode` is `iife`, it will bundle everything into `modulename.iife.js`. This is useful for browser service worker usage - import with `importScripts()`. If a module has a dependency, user must provide it in the app prior to the module import.
 
 - When `mode` is `app`, order field should contain dependency names and thus should be installed and available in `node_modules` directory. Builder will symlink all dependencies from `node_modules` into `appStaticDir` directory (for libs with es and iife - both files will be linked).
 

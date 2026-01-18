@@ -10,18 +10,10 @@ const splitExports = (exports) =>
     .map((line) => line.trim())
     .filter((line) => line !== '');
 
-const transformToIIFE = (identifier, exports) => {
-  if (identifier) return `exports.${identifier} = ${identifier};`;
-
-  const exportNames = splitExports(exports);
-  if (exportNames.length === 1) {
-    return `exports.${exportNames[0]} = ${exportNames[0]};`;
-  }
-
-  const exportsList = exportNames
-    .map((name) => `exports.${name} = ${name}`)
-    .join(',\n');
-  return exportsList;
+const transformToIIFEExport = (exportNames) => {
+  if (exportNames.length === 0) return '';
+  const exportsLines = exportNames.map((name) => `exports.${name} = ${name};`);
+  return exportsLines.join('\n');
 };
 
 const transformToESM = (identifier, exports) => {
@@ -32,11 +24,6 @@ const transformToESM = (identifier, exports) => {
 
   const exportsList = exportNames.map((name) => `  ${name}`).join(',\n');
   return `export {\n${exportsList},\n};`;
-};
-
-const modeTransformers = {
-  lib: [transformToESM, MODULE_EXPORTS_PATTERN],
-  iife: [transformToIIFE, ESM_MODULE_EXPORTS_PATTERN],
 };
 
 const extractExportNames = (content) => {
@@ -66,16 +53,16 @@ const removeExports = (content) => {
   return result;
 };
 
-const transformExports = (content, mode) => {
-  const [transformFn, pattern] = modeTransformers[mode];
-  return content.replace(
-    new RegExp(pattern, 'gm'),
-    (match, fullMatch, exports, identifier) => transformFn(identifier, exports),
+const transformToESMExport = (content) =>
+  content.replace(
+    new RegExp(MODULE_EXPORTS_PATTERN, 'gm'),
+    (match, fullMatch, exports, identifier) =>
+      transformToESM(identifier, exports),
   );
-};
 
 module.exports = {
-  transformExports,
+  transformToESMExport,
+  transformToIIFEExport,
   extractExportNames,
   removeExports,
   MODULE_EXPORTS_PATTERN,

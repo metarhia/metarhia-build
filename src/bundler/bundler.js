@@ -6,7 +6,7 @@ const {
   generateImportStatements,
 } = require('../transforms/imports');
 const {
-  transformExports,
+  transformToESMExport,
   extractExportNames,
   removeExports,
 } = require('../transforms/exports');
@@ -37,7 +37,7 @@ class Bundler {
       this.exportNames.push(...names);
       content = removeExports(content);
     } else {
-      content = transformExports(content, this.config.mode);
+      content = transformToESMExport(content, this.config.mode);
     }
 
     return content;
@@ -56,7 +56,7 @@ class Bundler {
     });
 
     const importsBlock = generateImportStatements(this.importRegistry);
-    const bundleContent = chunks.join('\n').replaceAll('\n\n\n', '\n\n');
+    const bundleContent = chunks.join('\n').replaceAll(/\n{3,}/g, '\n\n');
 
     return {
       header,

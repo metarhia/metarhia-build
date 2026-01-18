@@ -257,14 +257,14 @@ test('build iife mode: creates self-contained bundle with deps', async () => {
 
   // Check that the output is wrapped in an IIFE
   assert.ok(
-    output.includes(`var ${packageName.replace(/-/g, '')}IIFE`),
+    output.includes(`const ${packageName.replace(/-/g, '')}IIFE`),
     'Output should start with IIFE variable declaration',
   );
 
-  // Check that the test package content is included
+  // Check that the test package content is imported from IIFE
   assert.ok(
-    output.includes('//#region test-package'),
-    'Should include test-package source',
+    output.includes('testpackageIIFE'),
+    'Should import from test-package IIFE source',
   );
 
   // Check that the test4.js code is included

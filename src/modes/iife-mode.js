@@ -1,44 +1,82 @@
 'use strict';
 
-const {
-  writeFileSync,
-  readFileSync,
-  resolveFilePath,
-} = require('../utils/file-utils');
+const { writeFileSync, resolveFilePath } = require('../utils/file-utils');
 const logger = require('../utils/logger');
 const { Bundler } = require('../bundler/bundler');
-const { transformExports } = require('../transforms/exports');
-const { wrapInRegion } = require('../bundler/regions');
-const { BUNDLE_EXT } = require('../utils/file-utils');
+const { transformToIIFEExport } = require('../transforms/exports');
+const { BUNDLE_EXT, GENERATED_BY } = require('../utils/file-utils');
 
-const loadDependencies = (importRegistry, config) => {
-  const uniqueDeps = Array.from(new Set(importRegistry.keys()));
-  const depContents = uniqueDeps.map((lib) => {
-    const fileName = resolveFilePath(
-      config.cwd,
-      config.nodeModulesPath,
-      lib,
-      `${lib}${BUNDLE_EXT.lib}`,
-    );
-    const source = readFileSync(fileName, `dependency ${lib}`);
-    return wrapInRegion(lib, source);
-  });
-  return depContents.join('\n');
+const toIIFEVarName = (packageName) => packageName.replace(/-/g, '') + 'IIFE';
+
+const generateDependencyMappings = (importRegistry) => {
+  if (importRegistry.size === 0) return '';
+
+  const statements = [];
+
+  for (const [specifier, entry] of importRegistry.entries()) {
+    const iifeVarName = toIIFEVarName(specifier);
+
+    // Handle destructured imports: const { Entity, Schema } = metalibIIFE;
+    if (entry.named.size > 0) {
+      const namedParts = Array.from(entry.named).join(', ');
+      statements.push(`const { ${namedParts} } = ${iifeVarName};`);
+    }
+
+    // Handle default imports: const metalib2 = metalib2IIFE;
+    if (entry.defaultNames.size > 0) {
+      for (const defaultName of entry.defaultNames) {
+        statements.push(`const ${defaultName} = ${iifeVarName};`);
+      }
+    }
+  }
+
+  return statements.join('\n');
 };
 
-const wrapInIIFE = (packageName, content) => {
-  const iifeVarName = packageName.replace(/-/g, '');
+const generateDependencyValidation = (importRegistry) => {
+  if (importRegistry.size === 0) return '';
+
+  const uniqueDeps = Array.from(importRegistry.keys());
+  const checks = uniqueDeps.map((dep) => {
+    logger.info(
+      `IIFE module depends on "${dep}".` +
+        ` Ensure importScripts("${dep}.iife.js") in an app before this module.`,
+    );
+    const iifeVarName = toIIFEVarName(dep);
+    return (
+      `if (typeof ${iifeVarName} === 'undefined') {\n` +
+      `  throw new Error('Dependency "${dep}" is not available. ` +
+      `Ensure ${iifeVarName} is loaded either in service worker` +
+      `via importScripts("${dep}.iife.js")` +
+      `or in main thread via <script src="${dep}.iife.js"></script>` +
+      `before this module.');\n` +
+      `}`
+    );
+  });
+
+  return checks.join('\n');
+};
+
+const wrapInIIFE = (packageName, content, depsMapping, depsValidation) => {
+  const iifeVarName = toIIFEVarName(packageName);
+
+  let iifeBody = '';
+
+  if (depsValidation) {
+    iifeBody += depsValidation + '\n';
+  }
+
+  if (depsMapping) {
+    iifeBody += depsMapping + '\n';
+  }
+
+  iifeBody += content;
+
   return (
-    `var ${iifeVarName}IIFE = (function (exports) {\n` +
-    content +
+    `const ${iifeVarName} = (function (exports) {\n` +
+    iifeBody +
     '\nreturn exports;\n})({});\n'
   );
-};
-
-const generateExportsBlock = (exportNames) => {
-  if (exportNames.length === 0) return '';
-  const exportsLines = exportNames.map((name) => `exports.${name} = ${name};`);
-  return exportsLines.join('\n');
 };
 
 const executeIIFEMode = (config, packageJson, license) => {
@@ -48,18 +86,20 @@ const executeIIFEMode = (config, packageJson, license) => {
 
   const packageName = packageJson.name.split('/').pop();
 
-  let depsContent = '';
-  if (importRegistry.size > 0) {
-    depsContent = loadDependencies(importRegistry, config);
-    depsContent = transformExports(depsContent, 'iife');
-  }
+  const depsMapping = generateDependencyMappings(importRegistry);
+  const depsValidation = generateDependencyValidation(importRegistry);
 
-  const exportsBlock = generateExportsBlock(exportNames);
-  const combinedContent = depsContent + bundleContent + '\n' + exportsBlock;
-  const iifeContent = combinedContent.replaceAll('\n\n\n', '\n\n');
-  const wrapped = wrapInIIFE(packageName, iifeContent);
+  const exportsBlock = transformToIIFEExport(exportNames);
+  const combinedContent = bundleContent + '\n' + exportsBlock;
+  const iifeContent = combinedContent.replaceAll(/\n{3,}/g, '\n\n');
+  const wrapped = wrapInIIFE(
+    packageName,
+    iifeContent,
+    depsMapping,
+    depsValidation,
+  );
 
-  const content = header + wrapped;
+  const content = GENERATED_BY + header + wrapped;
   const outputFile = resolveFilePath(
     config.outputDir,
     `${packageName}${BUNDLE_EXT.iife}`,

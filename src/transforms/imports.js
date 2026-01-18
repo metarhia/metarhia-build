@@ -155,13 +155,10 @@ const processImports = (content, filename, importRegistry) => {
     while ((match = regex.exec(content)) !== null) {
       processMatch(patternName, match, filename, importRegistry);
     }
-    result = result.replace(pattern, '');
+    result = result.replace(pattern, '\n');
   }
 
-  return result.replace(/^\s*[\r\n]+/gm, (m) => {
-    const lines = m.split(/\r?\n/).filter((l) => l.trim() !== '');
-    return lines.length ? lines.join('\n') + '\n' : '';
-  });
+  return result;
 };
 
 const generateImportStatements = (importRegistry) => {
