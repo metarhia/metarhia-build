@@ -23,7 +23,34 @@ npm install --save-dev metarhia-build
 }
 ```
 
-2. Ensure you have a `lib/` directory with the source files listed in `build.json`
+Only `order` field is required. But you can use other options to customize the build process.
+Config options:
+
+```ts
+type Mode = 'lib' | 'iife' | 'app';
+interface Config {
+  order: string[];
+  mode?: Mode; // default 'lib'
+  libDir?: string; // default 'lib'
+  licensePath?: string; // default 'LICENSE'
+  appStaticDir?: string; // default 'application/static'
+  outputDir?: string; // default current directory
+}
+```
+
+- Default mode is `lib`. It just concantenate files in the order specified in `build.json` order field. And converts all requires to imports and puts import once at the top of the file.
+
+- When `mode` is `iife`, it will bundle everything into `modulename.iife.js`. This is useful for browser service worker usage - import with `importScripts()`. If a module has a dependency, user must provide it in the app prior to the module import.
+
+- When `mode` is `app`, order field should contain dependency names and thus should be installed and available in `node_modules` directory. Builder will symlink all dependencies from `node_modules` into `appStaticDir` directory (for libs with es and iife - both files will be linked).
+
+```json
+{
+  "order": ["metaschema", "metaqr", "metautil"]
+}
+```
+
+2. Ensure you have a `lib/` directory with the source files listed in `build.json` or set valid `libDir` option.
 
 3. Add a build script to your `package.json`:
 
@@ -53,13 +80,28 @@ module.exports = [
 npm run build
 ```
 
+Arguments:
+
+- `-c` or `--config` - path to config file
+- `-m` or `--mode` - mode to build - overrides mode in config file
+
+```bash
+npm run build -- -c ./path/to/build.other.json -m iife
+# or
+metarhia-build --c ./path/to/build.other.json
+# or
+metarhia-build --config ./path/to/build.other.json
+```
+
 This will:
 
-- Read files from `lib/` directory in the order specified in `build.json`
+- Read files from `lib/` (or `libDir` option) directory in the order specified in `build.json` order field.
+- Convert `require()` calls to `import` statements
+- Convert same `import` or `require` in multiple files to a single import at the top of the file.
 - Convert CommonJS `module.exports` to ES6 `export` statements
 - Remove `'use strict'` declarations
-- Remove internal submodules `require()` calls
-- Bundle everything into `modulename.mjs` with a header containing version and license information
+- Remove internal submodules `require()` or `import` calls
+- Bundle everything into `modulename.mjs` (or ouputDir/modulename.mjs) with a header containing version and license information. When `mode` is `iife` bundle name will be `modulename.iife.js`.
 
 ## License & Contributors
 

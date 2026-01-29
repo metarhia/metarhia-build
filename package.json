@@ -2,8 +2,11 @@
   "name": "metarhia-build",
   "version": "0.0.0",
   "author": "Timur Shemsedinov <timur.shemsedinov@gmail.com>",
+  "contributors": [
+    "Oleksandr Korneiko <oleksandr.korneiko@gmail.com>"
+  ],
   "license": "MIT",
-  "description": "Metarhia Module Builder",
+  "description": "Metarhia Module Builder - bundles metarhia libs into a single ES module file",
   "keywords": [
     "node.js",
     "metarhia",
@@ -11,8 +14,12 @@
     "builder"
   ],
   "main": "metarhia-build.js",
+  "files": [
+    "metarhia-build.js",
+    "src/*"
+  ],
   "bin": {
-    "metarhia-build": "./metarhia-build.js"
+    "metarhia-build": "metarhia-build.js"
   },
   "engines": {
     "node": ">=18"
@@ -39,5 +46,8 @@
     "eslint": "^9.35.0",
     "eslint-config-metarhia": "^9.1.5",
     "prettier": "^3.3.3"
+  },
+  "dependencies": {
+    "metaschema": "^2.2.2"
   }
 }

@@ -1,10 +1,11 @@
 'use strict';
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { BUNDLE_EXT } = require('../src/utils/file-utils');
 
 const fixturesDir = path.join(__dirname, 'fixtures');
 const buildPath = path.join(__dirname, '..', 'metarhia-build.js');
@@ -12,11 +13,23 @@ const packageJson = JSON.parse(
   fs.readFileSync(path.join(fixturesDir, 'package.json'), 'utf8'),
 );
 const packageName = packageJson.name.split('/').pop();
-const outputFile = path.join(fixturesDir, `${packageName}.mjs`);
+const outputFile = path.join(fixturesDir, `${packageName}${BUNDLE_EXT.lib}`);
+const outputIIFEFile = path.join(
+  fixturesDir,
+  `${packageName}${BUNDLE_EXT.iife}`,
+);
 
-const run = (cwd) =>
+after(() => {
+  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+  if (fs.existsSync(outputIIFEFile)) fs.unlinkSync(outputIIFEFile);
+});
+
+const run = (cwd, buildConfig) =>
   new Promise((resolve, reject) => {
-    const proc = spawn('node', [buildPath], {
+    const args = [buildPath];
+    if (buildConfig) args.push('--config', buildConfig);
+    const proc = spawn('node', args, {
+      env: { ...process.env, NODE_ENV: 'test' },
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -41,6 +54,18 @@ const run = (cwd) =>
     });
   });
 
+test('build: validates config', async () => {
+  const tempDir = path.join(__dirname, 'temp');
+  fs.mkdirSync(tempDir, { recursive: true });
+  fs.writeFileSync(path.join(tempDir, 'build.json'), '{"mode": "invalid"}');
+
+  try {
+    await assert.rejects(() => run(tempDir), /Invalid configuration/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('build: creates bundle with correct structure', async () => {
   if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
   await run(fixturesDir);
@@ -57,18 +82,28 @@ test('build: creates bundle with correct structure', async () => {
   assert.ok(output.includes(packageName)); // package name in header
   assert.ok(output.includes(licenseLines[0])); // license name
 
+  // Check required libs
+  assert.ok(
+    // eslint-disable-next-line max-len
+    output.includes(`import { TEST_PCKG_VAR, TEST_PCKG_VAR_1, TEST_PCKG_VAR_2, TEST_PCKG_VAR_3, TEST_PCKG_VAR_4 } from './test-package.js';
+`),
+  );
+
   // Check file comments
-  assert.ok(output.includes('// test1.js'));
-  assert.ok(output.includes('// test2.js'));
-  assert.ok(output.includes('// test3.js'));
+  assert.ok(output.includes('//#region test1.js'));
+  assert.ok(output.includes('//#region test2.js'));
+  assert.ok(output.includes('//#region test3.js'));
+  assert.ok(output.includes('//#region test4.js'));
 
   // Check exports
   assert.ok(output.includes('export { test1 };'));
   assert.ok(output.includes('export { test2 };'));
+  assert.ok(output.includes('export { test4 };'));
   assert.ok(output.includes('export {'));
 
-  // Check that require() calls are removed
+  // Check that require() and node import calls are removed
   assert.ok(!output.includes('require('));
+  assert.ok(!output.includes(`import fs from 'fs';`));
 
   // Check that 'use strict' is removed
   assert.ok(!output.includes(`'use strict'`));
@@ -83,9 +118,9 @@ test('build: processes files in correct order', async () => {
   const output = fs.readFileSync(outputFile, 'utf8');
 
   // Check that files appear in the correct order
-  const test1Index = output.indexOf('// test1.js');
-  const test2Index = output.indexOf('// test2.js');
-  const test3Index = output.indexOf('// test3.js');
+  const test1Index = output.indexOf('//#region test1.js');
+  const test2Index = output.indexOf('//#region test2.js');
+  const test3Index = output.indexOf('//#region test3.js');
 
   assert.ok(test1Index < test2Index, 'test1.js should come before test2.js');
   assert.ok(test2Index < test3Index, 'test2.js should come before test3.js');
@@ -166,12 +201,86 @@ test('build: creates output file with package name', async () => {
   // Verify output file is named after package.json name
   assert.ok(fs.existsSync(outputFile), 'Output file should be created');
   assert.ok(
-    outputFile.endsWith(`${packageName}.mjs`),
-    `Output file should be named ${packageName}.mjs`,
+    outputFile.endsWith(`${packageName}${BUNDLE_EXT.lib}`),
+    `Output file should be named ${packageName}${BUNDLE_EXT.lib}`,
   );
 
   // Clean up
   fs.unlinkSync(outputFile);
+});
+
+test('build app mode: creates symlinks for dependencies', async () => {
+  const appDir = path.join(fixturesDir, 'application');
+  const appStaticDir = path.join(appDir, 'static');
+  const testPkgPath = path.join(
+    fixturesDir,
+    'node_modules',
+    'test-package',
+    'test-package.mjs',
+  );
+
+  // Clean up any existing test files
+  if (fs.existsSync(appStaticDir)) {
+    await fs.promises.rm(appStaticDir, { recursive: true });
+  }
+
+  // Run in app mode using build.app.json
+  await run(fixturesDir, 'build.app.json');
+
+  // Verify the symlink was created
+  const linkPath = path.join(appStaticDir, 'test-package.js');
+  assert.ok(fs.existsSync(linkPath), 'Symlink should be created');
+
+  // Verify the symlink points to the correct location
+  const linkTarget = await fs.promises.readlink(linkPath);
+  const expectedTarget = path.relative(path.dirname(linkPath), testPkgPath);
+  assert.strictEqual(
+    linkTarget,
+    expectedTarget,
+    'Symlink should point to the correct file',
+  );
+
+  // Clean up
+  await fs.promises.rm(appDir, { recursive: true });
+});
+
+test('build iife mode: creates self-contained bundle with deps', async () => {
+  if (fs.existsSync(outputIIFEFile)) fs.unlinkSync(outputIIFEFile);
+
+  // Run in iife mode using build.iife.json
+  await run(fixturesDir, 'build.iife.json');
+
+  // Verify the output file was created
+  assert.ok(fs.existsSync(outputIIFEFile), 'Output file should be created');
+
+  const output = fs.readFileSync(outputIIFEFile, 'utf8');
+
+  // Check that the output is wrapped in an IIFE
+  assert.ok(
+    output.includes(`const ${packageName.replace(/-/g, '')}IIFE`),
+    'Output should start with IIFE variable declaration',
+  );
+
+  // Check that the test package content is imported from IIFE
+  assert.ok(
+    output.includes('testpackageIIFE'),
+    'Should import from test-package IIFE source',
+  );
+
+  // Check that the test4.js code is included
+  assert.ok(
+    output.includes('//#region test4.js'),
+    'Should include test4.js source',
+  );
+
+  // Check that the IIFE returns an exports object
+  assert.ok(
+    output.includes('return exports;') || output.includes('return exports }'),
+    'IIFE should return exports',
+  );
+
+  // Clean up
+  if (fs.existsSync(outputIIFEFile)) fs.unlinkSync(outputIIFEFile);
 });
 
 test('build: fails when build.json is missing', async () => {
@@ -179,7 +288,7 @@ test('build: fails when build.json is missing', async () => {
   fs.mkdirSync(tempDir, { recursive: true });
 
   try {
-    await assert.rejects(() => run(tempDir), /ENOENT|Cannot find module/);
+    await assert.rejects(() => run(tempDir), /Configuration file not found/);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
