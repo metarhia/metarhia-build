@@ -7,25 +7,29 @@
 [![npm downloads](https://img.shields.io/npm/dt/metarhia-build.svg)](https://www.npmjs.com/package/metarhia-build)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/metarhia/metarhia-build/blob/master/LICENSE)
 
-## Usage
-
-1. Installation
+## Installation
 
 ```bash
 npm install --save-dev metarhia-build
 ```
 
-2. Create a `build.json` file in your project root with the order of files to bundle:
+When installed in a project, the `metarhia-build` CLI is available in that project (e.g. via `npx metarhia-build` or via npm scripts).
+
+## Modes
+
+### Mode: lib (building library)
+
+Use in metarhia **libraries** that ship a single bundled `.mjs` file.
+
+1. Create a `build.json` in the project root with the order of files to bundle:
 
 ```json
-{
-  "order": ["error.js", "strings.js", "array.js", "async.js"]
-}
+{ "order": ["error.js", "array.js", "async.js"] }
 ```
 
-2. Ensure you have a `lib/` directory with the source files listed in `build.json`
+2. Put source files in `lib/` as listed in `build.json`.
 
-3. Add a build script to your `package.json`:
+3. In `package.json` add command:
 
 ```json
 "scripts": {
@@ -33,36 +37,43 @@ npm install --save-dev metarhia-build
 }
 ```
 
-4. Configure ESLint to treat the generated `.mjs` file as an ES module. Add to your `eslint.config.js`:
-
-```js
-module.exports = [
-  // your existing config
-  {
-    files: ['*.mjs'], // or use your specific package name
-    languageOptions: {
-      sourceType: 'module',
-    },
-  },
-];
-```
-
-5. Run the build process:
-
-```bash
-npm run build
-```
+4. Run: `npm run build`
 
 This will:
 
-- Read files from `lib/` directory in the order specified in `build.json`
+- Read files from `lib/` in the order in `build.json`
 - Convert CommonJS `module.exports` to ES6 `export` statements
-- Remove `'use strict'` declarations
-- Remove internal submodules `require()` calls
-- Bundle everything into `modulename.mjs` with a header containing version and license information
+- Remove `'use strict'` and internal `require()` calls
+- Write `modulename.mjs` with a version/license header
+
+Optional: configure ESLint for the generated `.mjs` (e.g. `languageOptions.sourceType: 'module'` for `*.mjs`).
+
+### Mode: app (link libraries to static web server folder)
+
+Use in **applications** that depend on packages built with metarhia-build. It scans `node_modules` for packages that have a `build.json`, finds their bundled `.mjs` files, and creates symlinks into a directory (e.g. for static serving).
+
+1. In your app’s `package.json`:
+
+```json
+"scripts": {
+  "link": "metarhia-build link"
+}
+```
+
+2. Ensure dependencies that use metarhia-build are built (each has its `.mjs` in `node_modules/<pkg>/`), then run:
+
+```bash
+npm run link
+```
+
+By default, symlinks are created under `./application/static`. To use another directory: `npm run link ./public/vendor`
+
+Or run the CLI directly: `npx metarhia-build link ./public/vendor`.
+
+Each bundled package’s `packagename.mjs` is linked as `application/static/packagename.js` (or under the path you pass). Packages without a built `.mjs` are skipped (with a message).
 
 ## License & Contributors
 
-Copyright (c) 2025 [Metarhia contributors](https://github.com/metarhia/metarhia-build/graphs/contributors).
+Copyright (c) 2025-2026 [Metarhia contributors](https://github.com/metarhia/metarhia-build/graphs/contributors).
 Metarhia-build is [MIT licensed](./LICENSE).\
 Metarhia-build is a part of [Metarhia](https://github.com/metarhia) technology stack.

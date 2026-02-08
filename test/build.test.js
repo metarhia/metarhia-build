@@ -14,9 +14,9 @@ const packageJson = JSON.parse(
 const packageName = packageJson.name.split('/').pop();
 const outputFile = path.join(fixturesDir, `${packageName}.mjs`);
 
-const run = (cwd) =>
+const run = (cwd, args = ['lib']) =>
   new Promise((resolve, reject) => {
-    const proc = spawn('node', [buildPath], {
+    const proc = spawn('node', [buildPath, ...args], {
       cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -179,8 +179,56 @@ test('build: fails when build.json is missing', async () => {
   fs.mkdirSync(tempDir, { recursive: true });
 
   try {
-    await assert.rejects(() => run(tempDir), /ENOENT|Cannot find module/);
+    await assert.rejects(
+      () => run(tempDir, ['lib']),
+      /ENOENT|Cannot find module/,
+    );
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('link: creates .js symlinks for packages with build.json', async () => {
+  const appDir = path.join(__dirname, 'link-app');
+  const nodeModules = path.join(appDir, 'node_modules');
+  const pkgDir = path.join(nodeModules, 'test-package');
+  const targetDir = path.join(appDir, 'application', 'static');
+
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.copyFileSync(
+    path.join(fixturesDir, 'build.json'),
+    path.join(pkgDir, 'build.json'),
+  );
+  fs.copyFileSync(
+    path.join(fixturesDir, 'package.json'),
+    path.join(pkgDir, 'package.json'),
+  );
+  fs.writeFileSync(
+    path.join(pkgDir, `${packageName}.mjs`),
+    '// dummy bundle\n',
+    'utf8',
+  );
+
+  try {
+    await run(appDir, ['link', './application/static']);
+    const linkPath = path.join(targetDir, `${packageName}.js`);
+    assert.ok(fs.existsSync(linkPath), 'Link should be created as .js');
+    const stat = fs.lstatSync(linkPath);
+    assert.ok(stat.isSymbolicLink(), 'Should be a symlink');
+    const resolved = fs.realpathSync(linkPath);
+    assert.strictEqual(
+      resolved,
+      path.resolve(pkgDir, `${packageName}.mjs`),
+      'Link should point to .mjs in node_modules',
+    );
+  } finally {
+    fs.rmSync(appDir, { recursive: true, force: true });
+  }
+});
+
+test('lib: default build runs when given lib argument', async () => {
+  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+  await run(fixturesDir, ['lib']);
+  assert.ok(fs.existsSync(outputFile), 'Output file should be created');
+  fs.unlinkSync(outputFile);
 });
