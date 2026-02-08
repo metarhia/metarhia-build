@@ -1,6 +1,6 @@
 {
   "name": "metarhia-build",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "author": "Timur Shemsedinov <timur.shemsedinov@gmail.com>",
   "license": "MIT",
   "description": "Metarhia Module Builder",
@@ -36,7 +36,7 @@
     "fix": "eslint . --fix && prettier --write \"**/*.js\" \"**/*.json\" \"**/*.md\""
   },
   "devDependencies": {
-    "eslint": "^9.35.0",
+    "eslint": "^9.39.2",
     "eslint-config-metarhia": "^9.1.5",
     "prettier": "^3.3.3"
   }
