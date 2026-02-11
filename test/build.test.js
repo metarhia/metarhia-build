@@ -1,6 +1,6 @@
 'use strict';
 
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,6 +13,10 @@ const packageJson = JSON.parse(
 );
 const packageName = packageJson.name.split('/').pop();
 const outputFile = path.join(fixturesDir, `${packageName}.mjs`);
+
+after(() => {
+  if (fs.existsSync(outputFile)) fs.unlinkSync(outputFile);
+});
 
 const run = (cwd, args = ['lib']) =>
   new Promise((resolve, reject) => {
@@ -57,18 +61,28 @@ test('build: creates bundle with correct structure', async () => {
   assert.ok(output.includes(packageName)); // package name in header
   assert.ok(output.includes(licenseLines[0])); // license name
 
+  // Check required libs
+  assert.ok(
+    // eslint-disable-next-line max-len
+    output.includes(`import { TEST_PCKG_VAR, TEST_PCKG_VAR_1, TEST_PCKG_VAR_2, TEST_PCKG_VAR_3, TEST_PCKG_VAR_4 } from './test-package.js';
+`),
+  );
+
   // Check file comments
   assert.ok(output.includes('// test1.js'));
   assert.ok(output.includes('// test2.js'));
   assert.ok(output.includes('// test3.js'));
+  assert.ok(output.includes('// test4.js'));
 
   // Check exports
   assert.ok(output.includes('export { test1 };'));
   assert.ok(output.includes('export { test2 };'));
+  assert.ok(output.includes('export { test4 };'));
   assert.ok(output.includes('export {'));
 
-  // Check that require() calls are removed
+  // Check that require() and node import calls are removed
   assert.ok(!output.includes('require('));
+  assert.ok(!output.includes(`import fs from 'fs';`));
 
   // Check that 'use strict' is removed
   assert.ok(!output.includes(`'use strict'`));
@@ -86,9 +100,11 @@ test('build: processes files in correct order', async () => {
   const test1Index = output.indexOf('// test1.js');
   const test2Index = output.indexOf('// test2.js');
   const test3Index = output.indexOf('// test3.js');
+  const test4Index = output.indexOf('// test4.js');
 
   assert.ok(test1Index < test2Index, 'test1.js should come before test2.js');
   assert.ok(test2Index < test3Index, 'test2.js should come before test3.js');
+  assert.ok(test3Index < test4Index, 'test3.js should come before test4.js');
 
   // Clean up
   fs.unlinkSync(outputFile);
