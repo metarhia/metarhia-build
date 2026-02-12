@@ -2,8 +2,11 @@
   "name": "metarhia-build",
   "version": "0.0.1",
   "author": "Timur Shemsedinov <timur.shemsedinov@gmail.com>",
+  "contributors": [
+    "Oleksandr Korneiko <oleksandr.korneiko@gmail.com>"
+  ],
   "license": "MIT",
-  "description": "Metarhia Module Builder",
+  "description": "Metarhia Module Builder - bundles metarhia libs into a single ES module file",
   "keywords": [
     "node.js",
     "metarhia",

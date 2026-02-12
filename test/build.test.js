@@ -62,10 +62,10 @@ test('build: creates bundle with correct structure', async () => {
   assert.ok(output.includes('// test2.js'));
   assert.ok(output.includes('// test3.js'));
 
-  // Check exports
-  assert.ok(output.includes('export { test1 };'));
-  assert.ok(output.includes('export { test2 };'));
+  // Check exports (single block at end of bundle)
   assert.ok(output.includes('export {'));
+  assert.ok(output.includes('  test1,'));
+  assert.ok(output.includes('  test2,'));
 
   // Check that require() calls are removed
   assert.ok(!output.includes('require('));
@@ -100,7 +100,7 @@ test('build: converts single identifier module.exports', async () => {
   const output = fs.readFileSync(outputFile, 'utf8');
 
   // test2.js has module.exports = test2; (single identifier)
-  assert.ok(output.includes('export { test2 };'));
+  assert.ok(output.includes('  test2,'));
 
   // Clean up
   fs.unlinkSync(outputFile);
@@ -113,7 +113,7 @@ test('build: converts single property module.exports', async () => {
   const output = fs.readFileSync(outputFile, 'utf8');
 
   // test1.js has module.exports = { test1 };
-  assert.ok(output.includes('export { test1 };'));
+  assert.ok(output.includes('  test1,'));
 
   // Clean up
   fs.unlinkSync(outputFile);
