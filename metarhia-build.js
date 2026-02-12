@@ -7,16 +7,20 @@ const {
   processImports,
   generateImportStatements,
 } = require('./lib/process-imports');
-const { transformToESMExport } = require('./lib/process-exports');
+const {
+  processExports,
+  generateExportStatements,
+} = require('./lib/process-exports');
 
-const importRegistry = new Map();
+const importRegistryMap = new Map();
+const exportRegistrySet = new Set();
 
 const processFile = (libDir, filename) => {
   const filePath = path.join(libDir, filename);
   let content = fs.readFileSync(filePath, 'utf8');
   content = content.replace(/'use strict';?\n{0,2}/g, '');
-  content = processImports(content, filename, importRegistry);
-  content = transformToESMExport(content);
+  content = processImports(content, filename, importRegistryMap);
+  content = processExports(content, exportRegistrySet);
   return content;
 };
 
@@ -56,10 +60,14 @@ const build = (cwd) => {
   }
 
   const header = generateBundleHeader(packageJson, cwd);
-  const importsBlock = generateImportStatements(importRegistry);
+  const importsBlock = generateImportStatements(importRegistryMap);
+  const exportsBlock = generateExportStatements(exportRegistrySet);
 
   const content =
-    header + importsBlock + bundle.join('\n').replaceAll(/\n{3,}/g, '\n\n');
+    header +
+    importsBlock +
+    bundle.join('\n').replaceAll(/\n{3,}/g, '\n\n') +
+    exportsBlock;
   fs.writeFileSync(outputFile, content, 'utf8');
   console.log(`Bundle created: ${outputFile}`);
 };
