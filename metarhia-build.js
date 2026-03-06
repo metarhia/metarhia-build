@@ -3,14 +3,16 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { between, split } = require('metautil');
+const { between } = require('metautil');
 
 const isBuiltin = (p) => p.startsWith('node:');
 const isInternal = (p) => p.startsWith('.');
 const trim = (s) => s.trim();
+const notEmpty = (s) => s.length > 0;
 
 const parseRequireCalls = (content) => {
   const requires = [];
+  let body = '';
   let pos = 0;
   while (true) {
     const idx = content.indexOf(`require('`, pos);
@@ -21,73 +23,34 @@ const parseRequireCalls = (content) => {
       pos = idx + 1;
       continue;
     }
-    const lineStart = content.lastIndexOf('\n', idx) + 1;
-    const rawEnd = content.indexOf('\n', idx);
-    const lineEnd = rawEnd === -1 ? content.length : rawEnd + 1;
-    const line = content.slice(lineStart, lineEnd);
-    let start = lineStart;
-    let names;
-    if (line.includes('}')) {
-      const closeBracePos = content.indexOf('}', lineStart);
-      let depth = 1;
-      let openBracePos = closeBracePos - 1;
-      while (openBracePos >= 0 && depth > 0) {
-        if (content[openBracePos] === '}') depth++;
-        else if (content[openBracePos] === '{') depth--;
-        openBracePos--;
-      }
-      openBracePos++;
-      start = content.lastIndexOf('\n', openBracePos) + 1;
-      const inner = content.slice(openBracePos + 1, closeBracePos);
-      names = inner.split(',').map(trim).filter(Boolean);
-    } else {
-      const [declaration] = split(line, '=');
-      const name = declaration.trim().slice(6).trim();
-      names = name ? [name] : [];
-    }
-    requires.push({ modulePath, names, start, end: lineEnd });
-    pos = idx + `require('`.length + modulePath.length;
+    const next = content.indexOf('\n', idx);
+    const lineEnd = next === -1 ? content.length : next + 1;
+    const closeBracePos = content.lastIndexOf('}', idx);
+    const openBracePos = content.lastIndexOf('{', closeBracePos);
+    const start = content.lastIndexOf('\n', openBracePos) + 1;
+    const inner = between(content.slice(start), '{', '}');
+    const names = inner.split(',').map(trim).filter(notEmpty);
+    requires.push({ modulePath, names });
+    body += content.slice(pos, start);
+    pos = lineEnd;
   }
-  return requires;
+  body += content.slice(pos);
+  return { requires, body };
 };
 
 const parseExports = (content) => {
   const idx = content.indexOf('module.exports');
-  if (idx === -1) return { names: [], start: -1, end: -1 };
-  const lineStart = content.lastIndexOf('\n', idx) + 1;
+  if (idx === -1) return { names: [], body: content };
+  const start = content.lastIndexOf('\n', idx) + 1;
   const afterEq = content.indexOf('=', idx) + 2;
-  let names = [];
-  let end;
-  if (content[afterEq] === '{') {
-    const inner = between(content.slice(afterEq), '{', '}');
-    names = inner.split(',').map(trim).filter(Boolean);
-    const closeIdx = content.indexOf('}', afterEq);
-    end = closeIdx + 1;
-    if (content[end] === ';') end++;
-    if (content[end] === '\n') end++;
-  } else {
-    const lineEnd = content.indexOf('\n', idx);
-    end = lineEnd === -1 ? content.length : lineEnd + 1;
-    const [, value] = split(content.slice(afterEq), ' ');
-    const identifier = value.replace(';', '').trim();
-    names = identifier ? [identifier] : [];
-  }
-  return { names, start: lineStart, end };
-};
-
-const removeRanges = (content, ranges) => {
-  if (ranges.length === 0) return content;
-  const sorted = [...ranges].sort((a, b) => a.start - b.start);
-  let result = '';
-  let pos = 0;
-  for (const range of sorted) {
-    if (range.start >= pos) {
-      if (range.start > pos) result += content.slice(pos, range.start);
-      pos = range.end;
-    }
-  }
-  result += content.slice(pos);
-  return result;
+  const closeBracePos = content.indexOf('}', afterEq);
+  const inner = between(content.slice(afterEq), '{', '}');
+  const names = inner.split(',').map(trim).filter(notEmpty);
+  let end = closeBracePos + 1;
+  if (content[end] === ';') end++;
+  if (content[end] === '\n') end++;
+  const body = content.slice(0, start) + content.slice(end);
+  return { names, body };
 };
 
 const processFile = (libDir, filename, buildOrder, processed) => {
@@ -98,12 +61,11 @@ const processFile = (libDir, filename, buildOrder, processed) => {
     content = content.slice(strictPrefix.length);
     if (content.startsWith('\n')) content = content.slice(1);
   }
-  const requires = parseRequireCalls(content);
-  const exportInfo = parseExports(content);
+  const { requires, body: noRequires } = parseRequireCalls(content);
+  const { names: exportNames, body: noExports } = parseExports(noRequires);
   const orderSet = new Set(buildOrder);
   const externals = new Map();
-  const removeList = [];
-  for (const { modulePath, names, start, end } of requires) {
+  for (const { modulePath, names } of requires) {
     if (isBuiltin(modulePath)) {
       const msg = `Node.js built-in module "${modulePath}" is not allowed`;
       throw new Error(`${msg} in ${filename}`);
@@ -118,20 +80,15 @@ const processFile = (libDir, filename, buildOrder, processed) => {
         const msg = `Circular dependency: ${filename} requires ${basename}`;
         throw new Error(msg);
       }
-      removeList.push({ start, end });
     } else {
       if (!externals.has(modulePath)) externals.set(modulePath, new Set());
       for (const name of names) externals.get(modulePath).add(name);
-      removeList.push({ start, end });
     }
   }
-  if (exportInfo.start !== -1) {
-    removeList.push({ start: exportInfo.start, end: exportInfo.end });
-  }
-  let body = removeRanges(content, removeList);
+  let body = noExports;
   while (body.startsWith('\n')) body = body.slice(1);
   body = body.trimEnd();
-  return { body, exportNames: exportInfo.names, externals };
+  return { body, exportNames, externals };
 };
 
 const build = (cwd) => {
