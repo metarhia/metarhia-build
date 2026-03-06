@@ -13,23 +13,27 @@
 npm install --save-dev metarhia-build
 ```
 
-When installed in a project, the `metarhia-build` CLI is available in that project (e.g. via `npx metarhia-build` or via npm scripts).
+The `metarhia-build` CLI is available in the project (e.g. `npx metarhia-build` or via npm scripts).
 
 ## Modes
 
-### Mode: lib (building library)
+### Build (bundle library)
 
-Use in metarhia **libraries** that ship a single bundled `.mjs` file.
+For **libraries** that ship a single bundled `.mjs` file.
 
-1. Create a `build.json` in the project root with the order of files to bundle:
+1. Create `build.json` in the project root:
 
 ```json
 { "order": ["error.js", "array.js", "async.js"] }
 ```
 
-2. Put source files in `lib/` as listed in `build.json`.
+2. Put CommonJS source files in `lib/` as listed. Each file may use:
+   - `const { a, b } = require('./internal.js');` — internal, stripped
+   - `const { x } = require('external-pkg');` — becomes `import { x } from './external-pkg.js';`
+   - `module.exports = { foo, bar };` — becomes `export { foo, bar };`
+   - Multiline destructuring `require` is supported
 
-3. In `package.json` add command:
+3. Add to `package.json`:
 
 ```json
 "scripts": {
@@ -37,22 +41,17 @@ Use in metarhia **libraries** that ship a single bundled `.mjs` file.
 }
 ```
 
-4. Run: `npm run build`
+4. Run `npm run build`
 
-This will:
+**Output:** `packagename.mjs` (from `package.json` name) with: import block, concatenated file bodies (with `// filename` comments), and a combined `export { ... }` block.
 
-- Read files from `lib/` in the order in `build.json`
-- Convert CommonJS `module.exports` to ES6 `export` statements
-- Remove `'use strict'` and internal `require()` calls
-- Write `modulename.mjs` with a version/license header
+**Constraints:** Node.js built-ins (`node:*`) are forbidden. Circular dependencies and unknown internal files produce build errors.
 
-Optional: configure ESLint for the generated `.mjs` (e.g. `languageOptions.sourceType: 'module'` for `*.mjs`).
+### Link (symlink built packages)
 
-### Mode: app (link libraries to static web server folder)
+For **applications** that depend on metarhia-build packages. Scans `node_modules` for packages with `build.json`, finds their `.mjs` bundles, and creates symlinks for static serving.
 
-Use in **applications** that depend on packages built with metarhia-build. It scans `node_modules` for packages that have a `build.json`, finds their bundled `.mjs` files, and creates symlinks into a directory (e.g. for static serving).
-
-1. In your app’s `package.json`:
+1. Add to your app’s `package.json`:
 
 ```json
 "scripts": {
@@ -60,20 +59,17 @@ Use in **applications** that depend on packages built with metarhia-build. It sc
 }
 ```
 
-2. Ensure dependencies that use metarhia-build are built (each has its `.mjs` in `node_modules/<pkg>/`), then run:
+2. Ensure dependencies are built (each has a `.mjs` in `node_modules/<pkg>/`), then run:
 
 ```bash
 npm run link
 ```
 
-By default, symlinks are created under `./application/static`. To use another directory: `npm run link ./public/vendor`
+By default, symlinks go to `./application/static`. Custom path: `npm run link ./public/vendor` or `npx metarhia-build link ./public/vendor`.
 
-Or run the CLI directly: `npx metarhia-build link ./public/vendor`.
+Each built package’s `packagename.mjs` is symlinked as `packagename.js` in the target directory. Packages without a built `.mjs` are skipped.
 
-Each bundled package’s `packagename.mjs` is linked as `application/static/packagename.js` (or under the path you pass). Packages without a built `.mjs` are skipped (with a message).
+## License
 
-## License & Contributors
-
-Copyright (c) 2025-2026 [Metarhia contributors](https://github.com/metarhia/metarhia-build/graphs/contributors).
-Metarhia-build is [MIT licensed](./LICENSE).\
-Metarhia-build is a part of [Metarhia](https://github.com/metarhia) technology stack.
+Copyright (c) 2025–2026 [Metarhia contributors](https://github.com/metarhia/metarhia-build/graphs/contributors).  
+[MIT licensed](./LICENSE). Part of [Metarhia](https://github.com/metarhia).
