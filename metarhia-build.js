@@ -25,9 +25,27 @@ const parseRequireCalls = (content) => {
     const rawEnd = content.indexOf('\n', idx);
     const lineEnd = rawEnd === -1 ? content.length : rawEnd + 1;
     const line = content.slice(lineStart, lineEnd);
-    const inner = between(line, '{', '}');
-    const names = inner.split(',').map(trim).filter(Boolean);
-    requires.push({ modulePath, names, start: lineStart, end: lineEnd });
+    let start = lineStart;
+    let names;
+    if (line.includes('}')) {
+      const closeBracePos = content.indexOf('}', lineStart);
+      let depth = 1;
+      let openBracePos = closeBracePos - 1;
+      while (openBracePos >= 0 && depth > 0) {
+        if (content[openBracePos] === '}') depth++;
+        else if (content[openBracePos] === '{') depth--;
+        openBracePos--;
+      }
+      openBracePos++;
+      start = content.lastIndexOf('\n', openBracePos) + 1;
+      const inner = content.slice(openBracePos + 1, closeBracePos);
+      names = inner.split(',').map(trim).filter(Boolean);
+    } else {
+      const [declaration] = split(line, '=');
+      const name = declaration.trim().slice(6).trim();
+      names = name ? [name] : [];
+    }
+    requires.push({ modulePath, names, start, end: lineEnd });
     pos = idx + `require('`.length + modulePath.length;
   }
   return requires;

@@ -29,6 +29,10 @@ test('complex: external requires -> import header, cross-file stripped', () => {
   assertBuildMatches('complex', 'complex.mjs');
 });
 
+test('multiline-require: multiline destructuring require stripped', () => {
+  assertBuildMatches('multiline-require', 'multiline-require.mjs');
+});
+
 test('circular: mutual require between files throws error', () => {
   assert.throws(
     () => build(fixture('circular')),
