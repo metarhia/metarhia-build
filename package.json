@@ -1,6 +1,6 @@
 {
   "name": "metarhia-build",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "author": "Timur Shemsedinov <timur.shemsedinov@gmail.com>",
   "license": "MIT",
   "description": "Metarhia Module Builder",
@@ -37,8 +37,8 @@
   },
   "devDependencies": {
     "eslint": "^9.39.2",
-    "eslint-config-metarhia": "^9.1.5",
-    "prettier": "^3.3.3"
+    "eslint-config-metarhia": "^9.1.8",
+    "prettier": "^3.8.1"
   },
   "dependencies": {
     "metautil": "^5.5.0"
