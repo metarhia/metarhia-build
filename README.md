@@ -43,9 +43,7 @@ For **libraries** that ship a single bundled `.mjs` file.
 
 4. Run `npm run build`
 
-**Output:** `packagename.mjs` (from `package.json` name) with: import block, concatenated file bodies (with `// filename` comments), and a combined `export { ... }` block.
-
-**Constraints:** Node.js built-ins (`node:*`) are forbidden. Circular dependencies and unknown internal files produce build errors.
+**Output:** `packagename.mjs` (from `package.json` name) with: import block, concatenated file bodies, and a combined `export { ... }` block.
 
 ### Link (symlink built packages)
 
