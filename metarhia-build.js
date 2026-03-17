@@ -10,31 +10,23 @@ const isInternal = (p) => p.startsWith('.');
 const trim = (s) => s.trim();
 const notEmpty = (s) => s.length > 0;
 
-const parseRequireCalls = (content) => {
+const parseRequireCalls = (source) => {
   const requires = [];
-  let body = '';
-  let pos = 0;
-  while (true) {
-    const idx = content.indexOf(`require('`, pos);
-    if (idx === -1) break;
-    const slice = content.slice(idx);
-    const modulePath = between(slice, `require('`, `')`);
-    if (!modulePath) {
-      pos = idx + 1;
-      continue;
+  let body = source;
+  let reqPos = body.indexOf(`require('`);
+  while (reqPos !== -1) {
+    const namesBlock = body.slice(0, reqPos);
+    const reqEnd = body.indexOf(';', reqPos) + 1;
+    const requireBlock = body.slice(reqPos, reqEnd);
+    const modulePath = between(requireBlock, `'`, `'`);
+    const identifiers = between(namesBlock, '{', '}');
+    body = body.slice(reqEnd);
+    if (identifiers) {
+      const names = identifiers.split(',').map(trim).filter(notEmpty);
+      requires.push({ modulePath, names });
     }
-    const next = content.indexOf('\n', idx);
-    const lineEnd = next === -1 ? content.length : next + 1;
-    const closeBracePos = content.lastIndexOf('}', idx);
-    const openBracePos = content.lastIndexOf('{', closeBracePos);
-    const start = content.lastIndexOf('\n', openBracePos) + 1;
-    const inner = between(content.slice(start), '{', '}');
-    const names = inner.split(',').map(trim).filter(notEmpty);
-    requires.push({ modulePath, names });
-    body += content.slice(pos, start);
-    pos = lineEnd;
+    reqPos = body.indexOf(`require('`);
   }
-  body += content.slice(pos);
   return { requires, body };
 };
 
@@ -53,7 +45,7 @@ const parseExports = (content) => {
   return { names, body };
 };
 
-const processFile = (libDir, filename, buildOrder, processed) => {
+const processFile = (libDir, filename) => {
   const filePath = path.join(libDir, filename);
   let content = fs.readFileSync(filePath, 'utf8');
   const strictPrefix = `'use strict';\n`;
@@ -63,24 +55,9 @@ const processFile = (libDir, filename, buildOrder, processed) => {
   }
   const { requires, body: noRequires } = parseRequireCalls(content);
   const { names: exportNames, body: noExports } = parseExports(noRequires);
-  const orderSet = new Set(buildOrder);
   const externals = new Map();
   for (const { modulePath, names } of requires) {
-    if (isBuiltin(modulePath)) {
-      const msg = `Node.js built-in module "${modulePath}" is not allowed`;
-      throw new Error(`${msg} in ${filename}`);
-    }
-    if (isInternal(modulePath)) {
-      const basename = path.basename(modulePath);
-      if (!orderSet.has(basename)) {
-        const msg = `Unknown file "${modulePath}" required`;
-        throw new Error(`${msg} in ${filename}`);
-      }
-      if (!processed.has(basename)) {
-        const msg = `Circular dependency: ${filename} requires ${basename}`;
-        throw new Error(msg);
-      }
-    } else {
+    if (!isBuiltin(modulePath) && !isInternal(modulePath)) {
       if (!externals.has(modulePath)) externals.set(modulePath, new Set());
       for (const name of names) externals.get(modulePath).add(name);
     }
@@ -98,20 +75,18 @@ const build = (cwd) => {
   const outputFile = path.join(cwd, `${packageName}.mjs`);
   const libDir = path.join(cwd, 'lib');
   const processedFiles = [];
-  const allExternals = new Map();
-  const processed = new Set();
+  const externals = new Map();
   for (const filename of order) {
-    const result = processFile(libDir, filename, order, processed);
-    processed.add(filename);
+    const result = processFile(libDir, filename);
     processedFiles.push({ filename, ...result });
     for (const [pkg, names] of result.externals) {
-      if (!allExternals.has(pkg)) allExternals.set(pkg, new Set());
-      for (const name of names) allExternals.get(pkg).add(name);
+      if (!externals.has(pkg)) externals.set(pkg, new Set());
+      for (const name of names) externals.get(pkg).add(name);
     }
   }
   let output = '';
-  if (allExternals.size > 0) {
-    for (const [pkg, names] of allExternals) {
+  if (externals.size > 0) {
+    for (const [pkg, names] of externals) {
       output += `import { ${[...names].join(', ')} } from './${pkg}.js';\n`;
     }
     output += '\n';
@@ -119,10 +94,10 @@ const build = (cwd) => {
   for (const { filename, body } of processedFiles) {
     output += `// ${filename}\n\n${body}\n\n`;
   }
-  const allExportNames = processedFiles.flatMap((f) => f.exportNames);
-  if (allExportNames.length > 0) {
+  const exports = processedFiles.flatMap((f) => f.exportNames);
+  if (exports.length > 0) {
     output += 'export {\n';
-    for (const name of allExportNames) output += `  ${name},\n`;
+    for (const name of exports) output += `  ${name},\n`;
     output += '};\n';
   }
   fs.writeFileSync(outputFile, output, 'utf8');
