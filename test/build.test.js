@@ -33,41 +33,18 @@ test('multiline-require: multiline destructuring require stripped', () => {
   assertBuildMatches('multiline-require', 'multiline-require.mjs');
 });
 
-test('circular: mutual require between files throws error', () => {
-  assert.throws(
-    () => build(fixture('circular')),
-    (err) => {
-      assert.ok(
-        err.message.toLowerCase().includes('circular'),
-        `Expected circular error, got: ${err.message}`,
-      );
-      return true;
-    },
-  );
+test('circular: mutual require stripped', () => {
+  assertBuildMatches('circular', 'circular.mjs');
 });
 
-test('import-node: require of Node.js built-in throws error', () => {
-  assert.throws(
-    () => build(fixture('import-node')),
-    (err) => {
-      assert.ok(
-        err.message.toLowerCase().includes('built-in'),
-        `Expected built-in error, got: ${err.message}`,
-      );
-      return true;
-    },
-  );
+test('import-npm: non-destructuring require stripped', () => {
+  assertBuildMatches('import-npm', 'import-npm.mjs');
 });
 
-test('import-unknown: require of missing file throws error', () => {
-  assert.throws(
-    () => build(fixture('import-unknown')),
-    (err) => {
-      assert.ok(
-        err.message.toLowerCase().includes('unknown'),
-        `Expected unknown file error, got: ${err.message}`,
-      );
-      return true;
-    },
-  );
+test('import-node: Node built-in require stripped', () => {
+  assertBuildMatches('import-node', 'import-node.mjs');
+});
+
+test('import-unknown: unknown file require stripped', () => {
+  assertBuildMatches('import-unknown', 'import-unknown.mjs');
 });
