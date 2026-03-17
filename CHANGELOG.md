@@ -2,6 +2,13 @@
 
 ## [Unreleased][unreleased]
 
+## [0.0.3][] - 2026-03-17
+
+- Remove validation checks: circular dependencies, unknown files, Node built-ins, or non-destructuring `require`; builder only strips require lines and emits bundle
+- Non-destructuring `require` are skipped (not collected for imports)
+- Simplify `parseRequireCalls`
+- Add test cases: circular, import-npm, import-node, import-unknown
+
 ## [0.0.2][] - 2026-03-06
 
 - Rewrite bundler engine: string-based parsing using `metautil`
